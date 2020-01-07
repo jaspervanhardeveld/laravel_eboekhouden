@@ -2,7 +2,6 @@
     "name": "daanvanberkel/laravel_eboekhouden",
     "description": "Eboekhouden provider for Laravel",
     "type": "library",
-    "license": "",
     "authors": [
         {
             "name": "Daan van Berkel",
@@ -11,7 +10,7 @@
     ],
     "require": {
         "laravel/framework": "^6.10",
-        "daanvanberkel/laravel_accounting": "1.0.1"
+        "daanvanberkel/laravel_accounting": "^1.0"
     },
     "autoload": {
         "psr-4": {
