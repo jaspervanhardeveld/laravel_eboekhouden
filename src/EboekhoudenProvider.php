@@ -258,11 +258,11 @@ class EboekhoudenProvider implements AccountingProvider {
         $lines = array_merge(
             $hours->map(function ($hour) use ($work) {
                 return [
-                    "Aantal" => $hour->hours,
+                    "Aantal" => $hour['hours'],
                     "Eenheid" => "Uur",
                     "Code" => "1",
-                    "Omschrijving" => "Gewerkte uren, " . $hour->work_date->format('d-m-Y'),
-                    "PrijsPerEenheid" => $hour->price_per_hour,
+                    "Omschrijving" => "Gewerkte uren, " . Carbon::make($hour['work_date'])->format('d-m-Y'),
+                    "PrijsPerEenheid" => $hour['price_per_hour'],
                     "BTWCode" => $work['tax_code'],
                     "TegenrekeningCode" => (string) $work['ledger_code'],
                     "KostenplaatsID" => 0
@@ -270,11 +270,11 @@ class EboekhoudenProvider implements AccountingProvider {
             })->toArray(),
             $products->map(function ($product) use ($work) {
                 return [
-                    "Aantal" => $product->amount,
+                    "Aantal" => $product['amount'],
                     "Eenheid" => "Stuk",
-                    "Code" => $product->product->code,
-                    "Omschrijving" => $product->description,
-                    "PrijsPerEenheid" => (float) number_format($product->sell_price_per_one, 2, '.', ''),
+                    "Code" => $product['code'],
+                    "Omschrijving" => $product['description'],
+                    "PrijsPerEenheid" => (float) number_format($product['sell_price_per_one'], 2, '.', ''),
                     "BTWCode" => $work['tax_code'],
                     "TegenrekeningCode" => (string) $work['ledger_code'],
                     "KostenplaatsID" => 0
@@ -313,32 +313,34 @@ class EboekhoudenProvider implements AccountingProvider {
 
     private function getORel(array $relation): array
     {
-        $id = $relation['id_eboekhouden'] == 1 ? 0 : $relation['id_eboekhouden'];
+        $relation['id_eboekhouden'] = $relation['id_eboekhouden'] ?? 0;
+
+        $id = $relation['id_eboekhouden'] <= 1 ? 0 : $relation['id_eboekhouden'];
 
         return [
             "ID" => $id,
             "AddDatum" => Carbon::make($relation['add_datum'])->format('c'),
             "Code" => $relation['code'],
             "Bedrijf" => $relation['bedrijf'],
-            "Contactpersoon" => $relation['contactpersoon'],
-            "Geslacht" => $relation['geslacht'],
-            "Adres" => $relation['adres'],
-            "Postcode" => $relation['postcode'],
-            "Plaats" => $relation['plaats'],
-            "Land" => $relation['land'],
+            "Contactpersoon" => $relation['contactpersoon'] ?? '',
+            "Geslacht" => $relation['geslacht'] ?? '',
+            "Adres" => $relation['adres'] ?? '',
+            "Postcode" => $relation['postcode'] ?? '',
+            "Plaats" => $relation['plaats'] ?? '',
+            "Land" => $relation['land'] ?? '',
             "Adres2" => "",
             "Postcode2" => "",
             "Plaats2" => "",
             "Land2" => "",
-            "Telefoon" => $relation['telefoon'],
-            "GSM" => $relation['GSM'],
+            "Telefoon" => $relation['telefoon'] ?? '',
+            "GSM" => $relation['gsm'] ?? '',
             "FAX" => "",
-            "Email" => $relation['email'],
-            "Site" => $relation['site'],
-            "Notitie" => $relation['notitie'],
+            "Email" => $relation['email'] ?? '',
+            "Site" => $relation['site'] ?? '',
+            "Notitie" => $relation['notitie'] ?? '',
             "Bankrekening" => "",
             "Girorekening" => "",
-            "BTWNummer" => $relation['btw_nummer'],
+            "BTWNummer" => $relation['btw_nummer'] ?? '',
             "Aanhef" => "",
             "IBAN" => "",
             "BIC" => "",
