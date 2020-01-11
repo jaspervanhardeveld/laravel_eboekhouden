@@ -4,42 +4,58 @@ namespace Dvb\Eboekhouden;
 use Carbon\Carbon;
 use DateTime;
 use Dvb\Accounting\AccountingException;
+use Dvb\Accounting\AccountingInvoice;
+use Dvb\Accounting\AccountingLedger;
+use Dvb\Accounting\AccountingMutation;
 use Dvb\Accounting\AccountingProvider;
+use Dvb\Accounting\AccountingRelation;
 use Dvb\Accounting\MutationFilter;
+use Dvb\Eboekhouden\Models\EboekhoudenMutation;
+use Dvb\Eboekhouden\Models\EboekhoudenRelation;
+use Models\EboekhoudenLedger;
 use SoapClient;
 
 class EboekhoudenProvider implements AccountingProvider {
 
-    /**
-     * @var SoapClient
-     */
-    private $soapClient;
+    private SoapClient $soapClient;
+    private string $session_id;
+    private array $config;
 
     /**
-     * @var string
+     * EboekhoudenProvider constructor.
+     * @param array $config
+     * @throws AccountingException
      */
-    private $username;
-
-    /**
-     * @var string
-     */
-    private $sec_code_1;
-
-    /**
-     * @var string
-     */
-    private $sec_code_2;
-
-    /**
-     * @var string
-     */
-    private $session_id;
-
-    public function __construct()
+    public function __construct(array $config)
     {
-        $this->username = config('eboekhouden.username');
-        $this->sec_code_1 = config('eboekhouden.security_code1');
-        $this->sec_code_2 = config('eboekhouden.security_code2');
+        $this->validateConfig($config);
+
+        $this->config = $config;
+    }
+
+    /**
+     * Validate given config array
+     *
+     * @param array $config
+     * @throws AccountingException
+     */
+    private function validateConfig(array $config) {
+        $required = [
+            'username',
+            'sec_code_1',
+            'sec_code_2',
+            'wsdl',
+            'payment_term',
+            'invoice_template',
+            'email_from_name',
+            'email_from_address'
+        ];
+
+        foreach($required as $item) {
+            if (!isset($config[$item]) || empty($config[$item])) {
+                throw new AccountingException("Config item $item is missing.");
+            }
+        }
     }
 
     /**
@@ -54,16 +70,16 @@ class EboekhoudenProvider implements AccountingProvider {
         }
 
         try {
-            $this->soapClient = new SoapClient(config('eboekhouden.wsdl'));
+            $this->soapClient = new SoapClient($this->config['wsdl']);
         } catch (\SoapFault $exception) {
             throw new AccountingException($exception->getMessage());
         }
 
         $result = $this->soapClient->__soapCall('OpenSession', [
             "OpenSession" => [
-                "Username" => $this->username,
-                "SecurityCode1" => $this->sec_code_1,
-                "SecurityCode2" => $this->sec_code_2
+                "Username" => $this->config['username'],
+                "SecurityCode1" => $this->config['sec_code_1'],
+                "SecurityCode2" => $this->config['sec_code_2']
             ]
         ]);
 
@@ -87,7 +103,10 @@ class EboekhoudenProvider implements AccountingProvider {
     }
 
     /**
-     * @inheritDoc
+     * Get all relations from eboekhouden
+     *
+     * @return AccountingRelation[]
+     * @throws AccountingException
      */
     public function getRelations(): array
     {
@@ -96,7 +115,7 @@ class EboekhoudenProvider implements AccountingProvider {
         $result = $this->soapClient->__soapCall('GetRelaties', [
             'GetRelaties' => [
                 'SessionID' => $this->session_id,
-                'SecurityCode2' => $this->sec_code_2,
+                'SecurityCode2' => $this->config['sec_code_2'],
                 'cFilter' => [
                     'Trefwoord' => '',
                     'Code' => '',
@@ -113,11 +132,14 @@ class EboekhoudenProvider implements AccountingProvider {
             $relations = [$relations];
         }
 
-        return $relations;
+        return array_map(fn($item) => new EboekhoudenRelation((array) $item), $relations);
     }
 
     /**
-     * @inheritDoc
+     * Get all ledgers from eboekhouden
+     *
+     * @return AccountingLedger[]
+     * @throws AccountingException
      */
     public function getLedgers(): array
     {
@@ -126,7 +148,7 @@ class EboekhoudenProvider implements AccountingProvider {
         $result = $this->soapClient->__soapCall('GetGrootboekrekeningen', [
             "GetGrootboekrekeningen" => [
                 "SessionID" => $this->session_id,
-                "SecurityCode2" => $this->sec_code_2,
+                "SecurityCode2" => $this->config['sec_code_2'],
                 "cFilter" => [
                     "ID" => "",
                     "Code" => "",
@@ -143,11 +165,15 @@ class EboekhoudenProvider implements AccountingProvider {
             $ledgers = [$ledgers];
         }
 
-        return $ledgers;
+        return array_map(fn($item) => new EboekhoudenLedger((array) $item), $ledgers);
     }
 
     /**
-     * @inheritDoc
+     * Get all mutations from eboekhouden
+     *
+     * @param MutationFilter|null $filter
+     * @return AccountingMutation[]
+     * @throws AccountingException
      */
     public function getMutations(MutationFilter $filter = null): array
     {
@@ -163,7 +189,7 @@ class EboekhoudenProvider implements AccountingProvider {
         $result = $this->soapClient->__soapCall('GetMutaties', [
             'GetMutaties' => [
                 'SessionID' => $this->session_id,
-                'SecurityCode2' => $this->sec_code_2,
+                'SecurityCode2' => $this->config['sec_code_2'],
                 'cFilter' => [
                     'MutatieNr' => $filter->getMutationNumber(),
                     'MutatieNrVan' => 0,
@@ -181,25 +207,31 @@ class EboekhoudenProvider implements AccountingProvider {
             return [];
         }
 
-        if (!is_array($result->GetMutatiesResult->Mutaties->cMutatieList)) {
-            return [$result->GetMutatiesResult->Mutaties->cMutatieList];
+        $mutations = $result->GetMutatiesResult->Mutaties->cMutatieList;
+
+        if (!is_array($mutations)) {
+            $mutations = [$mutations];
         }
 
-        return $result->GetMutatiesResult->Mutaties->cMutatieList;
+        return array_map(fn($item) => new EboekhoudenMutation((array) $item), $mutations);
     }
 
     /**
-     * @inheritDoc
+     * Add a new invoice to eboekhouden
+     *
+     * @param AccountingInvoice $invoice
+     * @return string       New invoice number
+     * @throws AccountingException
      */
-    public function addInvoice(array $work): string
+    public function addInvoice(AccountingInvoice $invoice): string
     {
         $this->createSoapClient();
 
         $result = $this->soapClient->__soapCall('AddFactuur', [
             "AddFactuur" => [
                 "SessionID" => $this->session_id,
-                "SecurityCode2" => $this->sec_code_2,
-                "oFact" => $this->getOFact($work)
+                "SecurityCode2" => $this->config['sec_code_2'],
+                "oFact" => $this->getOFact($invoice)
             ]
         ]);
 
@@ -209,38 +241,46 @@ class EboekhoudenProvider implements AccountingProvider {
     }
 
     /**
-     * @inheritDoc
+     * Add new relation to eboekhouden
+     *
+     * @param AccountingRelation $relation
+     * @return AccountingRelation
+     * @throws AccountingException
      */
-    public function addRelation(array $relation): array
+    public function addRelation(AccountingRelation $relation): AccountingRelation
     {
         $this->createSoapClient();
 
         $result = $this->soapClient->__soapCall('AddRelatie', [
             "AddRelatie" => [
                 "SessionID" => $this->session_id,
-                "SecurityCode2" => $this->sec_code_2,
+                "SecurityCode2" => $this->config['sec_code_2'],
                 "oRel" => $this->getORel($relation)
             ]
         ]);
 
         $this->checkError('AddRelatie', $result);
 
-        $relation['id_eboekhouden'] = (int) $result->AddRelatieResult->Rel_ID;
+        $relation->setId((int) $result->AddRelatieResult->Rel_ID);
 
         return $relation;
     }
 
     /**
-     * @inheritDoc
+     * Update relation
+     *
+     * @param AccountingRelation $relation
+     * @return AccountingRelation
+     * @throws AccountingException
      */
-    public function updateRelation(array $relation): array
+    public function updateRelation(AccountingRelation $relation): AccountingRelation
     {
         $this->createSoapClient();
 
         $result = $this->soapClient->__soapCall('UpdateRelatie', [
             "UpdateRelatie" => [
                 "SessionID" => $this->session_id,
-                "SecurityCode2" => $this->sec_code_2,
+                "SecurityCode2" => $this->config['sec_code_2'],
                 "oRel" => $this->getORel($relation)
             ]
         ]);
@@ -250,49 +290,30 @@ class EboekhoudenProvider implements AccountingProvider {
         return $relation;
     }
 
-    private function getOFact(array $work): array
+    private function getOFact(AccountingInvoice $invoice): array
     {
-        $hours = collect($work['hours'] ?? []);
-        $products = collect($work['products'] ?? []);
-
-        $lines = array_merge(
-            $hours->map(function ($hour) use ($work) {
-                return [
-                    "Aantal" => $hour['hours'],
-                    "Eenheid" => "Uur",
-                    "Code" => "1",
-                    "Omschrijving" => "Gewerkte uren, " . Carbon::make($hour['work_date'])->format('d-m-Y'),
-                    "PrijsPerEenheid" => $hour['price_per_hour'],
-                    "BTWCode" => $work['tax_code'],
-                    "TegenrekeningCode" => (string) $work['ledger_code'],
-                    "KostenplaatsID" => 0
-                ];
-            })->toArray(),
-            $products->map(function ($product) use ($work) {
-                return [
-                    "Aantal" => $product['amount'],
-                    "Eenheid" => "Stuk",
-                    "Code" => $product['code'],
-                    "Omschrijving" => $product['description'],
-                    "PrijsPerEenheid" => (float) number_format($product['sell_price_per_one'], 2, '.', ''),
-                    "BTWCode" => $work['tax_code'],
-                    "TegenrekeningCode" => (string) $work['ledger_code'],
-                    "KostenplaatsID" => 0
-                ];
-            })->toArray()
-        );
+        $lines = array_map(fn($line) => [
+            'Aantal' => $line->getAmount(),
+            'Eenheid' => $line->getUnit(),
+            'Code' => $line->getCode(),
+            'Omschrijving' => $line->getDescription(),
+            'PrijsPerEenheid' => $line->getPrice(),
+            'BTWCode' => $line->getTaxCode(),
+            'TegenrekeningCode' => $line->getLedgerCode(),
+            'KostenplaatsID' => 0
+        ], $invoice->getLines());
 
         return [
-            "Factuurnummer" => (string) $work['invoice_number'],
-            "Relatiecode" => (string) $work['relation_code'],
+            "Factuurnummer" => $invoice->getInvoiceNumber(),
+            "Relatiecode" => $invoice->getRelationCode(),
             "Datum" => (new DateTime())->format('c'),
-            "Betalingstermijn" => config('eboekhouden.payment_term'),
-            "Factuursjabloon" => config('eboekhouden.invoice_template'),
+            "Betalingstermijn" => $this->config['payment_term'],
+            "Factuursjabloon" => $this->config['invoice_template'],
             "PerEmailVerzenden" => 0,
             "EmailOnderwerp" => "",
             "EmailBericht" => "",
-            "EmailVanAdres" => config('eboekhouden.email_from_address'),
-            "EmailVanNaam" => config('eboekhouden.email_from_name'),
+            "EmailVanAdres" => $this->config['email_from_address'],
+            "EmailVanNaam" => $this->config['email_from_name'],
             "AutomatischeIncasso" => 0,
             "IncassoIBAN" => "",
             "IncassoMachtigingSoort" => "",
@@ -306,41 +327,43 @@ class EboekhoudenProvider implements AccountingProvider {
             "IncassoOmschrijvingRegel2" => "",
             "IncassoOmschrijvingRegel3" => "",
             "InBoekhoudingPlaatsen" => 1,
-            "BoekhoudmutatieOmschrijving" => $work['description'],
+            "BoekhoudmutatieOmschrijving" => $invoice->getDescription(),
             "Regels" => $lines
         ];
     }
 
-    private function getORel(array $relation): array
+    private function getORel(AccountingRelation $relation): array
     {
-        $relation['id_eboekhouden'] = $relation['id_eboekhouden'] ?? 0;
+        $id = $relation->getId();
 
-        $id = $relation['id_eboekhouden'] <= 1 ? 0 : $relation['id_eboekhouden'];
+        if (empty($id) || $id == 1) {
+            $id = 0;
+        }
 
         return [
             "ID" => $id,
-            "AddDatum" => Carbon::make($relation['add_datum'])->format('c'),
-            "Code" => $relation['code'],
-            "Bedrijf" => $relation['bedrijf'],
-            "Contactpersoon" => $relation['contactpersoon'] ?? '',
-            "Geslacht" => $relation['geslacht'] ?? '',
-            "Adres" => $relation['adres'] ?? '',
-            "Postcode" => $relation['postcode'] ?? '',
-            "Plaats" => $relation['plaats'] ?? '',
-            "Land" => $relation['land'] ?? '',
+            "AddDatum" => ($relation->getAddDate() ?? new DateTime())->format('c'),
+            "Code" => (string) $relation->getCode() ?? '',
+            "Bedrijf" => $relation->getCompany() ?? '',
+            "Contactpersoon" => $relation->getContact() ?? '',
+            "Geslacht" => $relation->getGender() ?? '',
+            "Adres" => $relation->getAddress() ?? '',
+            "Postcode" => $relation->getZipcode() ?? '',
+            "Plaats" => $relation->getCity() ?? '',
+            "Land" => $relation->getCountry() ?? '',
             "Adres2" => "",
             "Postcode2" => "",
             "Plaats2" => "",
             "Land2" => "",
-            "Telefoon" => $relation['telefoon'] ?? '',
-            "GSM" => $relation['gsm'] ?? '',
+            "Telefoon" => $relation->getPhone() ?? '',
+            "GSM" => $relation->getCellPhone() ?? '',
             "FAX" => "",
-            "Email" => $relation['email'] ?? '',
-            "Site" => $relation['site'] ?? '',
-            "Notitie" => $relation['notitie'] ?? '',
+            "Email" => $relation->getEmail() ?? '',
+            "Site" => $relation->getSite() ?? '',
+            "Notitie" => $relation->getNotes() ?? '',
             "Bankrekening" => "",
             "Girorekening" => "",
-            "BTWNummer" => $relation['btw_nummer'] ?? '',
+            "BTWNummer" => $relation->getVatNumber() ?? '',
             "Aanhef" => "",
             "IBAN" => "",
             "BIC" => "",
