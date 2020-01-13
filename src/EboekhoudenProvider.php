@@ -1,7 +1,7 @@
 <?php
 namespace Dvb\Eboekhouden;
 
-use Carbon\Carbon;
+
 use DateTime;
 use Dvb\Accounting\AccountingException;
 use Dvb\Accounting\AccountingInvoice;
@@ -10,9 +10,9 @@ use Dvb\Accounting\AccountingMutation;
 use Dvb\Accounting\AccountingProvider;
 use Dvb\Accounting\AccountingRelation;
 use Dvb\Accounting\MutationFilter;
+use Dvb\Eboekhouden\Models\EboekhoudenLedger;
 use Dvb\Eboekhouden\Models\EboekhoudenMutation;
 use Dvb\Eboekhouden\Models\EboekhoudenRelation;
-use Models\EboekhoudenLedger;
 use SoapClient;
 
 class EboekhoudenProvider implements AccountingProvider {
