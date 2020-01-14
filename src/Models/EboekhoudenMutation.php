@@ -22,8 +22,15 @@ class EboekhoudenMutation extends AccountingMutation {
                 ->setRelationCode($item['RelatieCode'])
                 ->setInvoiceNumber($item['Factuurnummer'])
                 ->setDescription($item['Omschrijving'])
-                ->setPaymentTerm($item['Betalingstermijn'])
-                ->setLines(array_map(fn($line) => new EboekhoudenMutationLine($line), $item['MutatieRegels']['cMutatieRegel']));
+                ->setPaymentTerm($item['Betalingstermijn']);
+
+            $lines = $item['MutatieRegels']->cMutatieListRegel;
+
+            if (is_object($lines)) {
+                $this->addLine(new EboekhoudenMutationLine((array) $lines));
+            } else {
+                $this->setLines(array_map(fn($line) => new EboekhoudenMutationLine((array) $line), $item['MutatieRegels']->cMutatieListRegel));
+            }
         }
     }
 }

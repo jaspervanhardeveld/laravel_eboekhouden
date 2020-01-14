@@ -8,16 +8,16 @@
     "packages": [
         {
             "name": "daanvanberkel/laravel_accounting",
-            "version": "v2.1.3",
+            "version": "v2.2.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/daanvanberkel/laravel_accounting.git",
-                "reference": "905bbb5084590baeb2dc52c733086237aab38165"
+                "reference": "8e450a3e22149405da74cdf286405e12691588bd"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/daanvanberkel/laravel_accounting/zipball/905bbb5084590baeb2dc52c733086237aab38165",
-                "reference": "905bbb5084590baeb2dc52c733086237aab38165",
+                "url": "https://api.github.com/repos/daanvanberkel/laravel_accounting/zipball/8e450a3e22149405da74cdf286405e12691588bd",
+                "reference": "8e450a3e22149405da74cdf286405e12691588bd",
                 "shasum": ""
             },
             "require": {
@@ -30,6 +30,9 @@
                 }
             },
             "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
             "authors": [
                 {
                     "name": "Daan van Berkel",
@@ -37,7 +40,7 @@
                 }
             ],
             "description": "Laravel accounting",
-            "time": "2020-01-11T10:54:32+00:00"
+            "time": "2020-01-14T10:08:39+00:00"
         },
         {
             "name": "doctrine/inflector",
